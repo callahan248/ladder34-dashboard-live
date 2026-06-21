@@ -122,6 +122,24 @@
   body.checkmode .dprog{display:flex}
   .dbody{overflow:auto;padding:8px 16px 28px;flex:1}
   .dtools{display:flex;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .editor{display:flex;flex-direction:column;gap:14px}
+  .efield{display:flex;flex-direction:column;gap:5px}
+  .efield label{font-size:11px;font-weight:700;color:var(--tx3)}
+  .ein{background:var(--bg);border:1px solid var(--line2);color:var(--tx);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;width:100%;outline:none}
+  .ein:focus{border-color:var(--cal)}
+  .esec{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--panel2)}
+  .esec-h{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .sname{font-weight:700}
+  .eitem{display:flex;gap:6px;align-items:center;margin:5px 0}
+  .eitem .ein{flex:1}
+  .esub{font-size:10px;color:var(--tx3);white-space:nowrap}
+  .emove{background:var(--bg);border:1px solid var(--line2);color:var(--tx2);border-radius:7px;padding:6px;font-size:11px;font-family:inherit;max-width:92px}
+  .xbtn{background:var(--bg);border:1px solid var(--line2);color:var(--tx2);border-radius:7px;width:32px;height:34px;cursor:pointer;flex:0 0 auto;font-size:13px}
+  .xbtn:hover{color:#fff;background:var(--red);border-color:var(--red)}
+  .eadd{display:flex;gap:6px;margin-top:8px}
+  .eadd .ein{flex:1}
+  .enote{font-size:11px;color:var(--tx3);margin-top:6px;line-height:1.4}
+  .minib.on{background:var(--cal);border-color:var(--cal);color:#fff}
   /* print modal */
   #pmodal{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:rgba(4,8,12,.55)}
   #pmodal.show{display:grid}
@@ -229,22 +247,30 @@ function el(t,c){const e=document.createElement(t); if(c)e.className=c; return e
 function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 function hash(s){let h=2166136261>>>0;for(let k=0;k<s.length;k++){h^=s.charCodeAt(k);h=Math.imul(h,16777619)>>>0;}return h.toString(36);}
-const LS={checks:'l34_checks_v1',theme:'l34_theme',by:'l34_by',view:'l34_view',side:'l34_side',hot:'l34_hotspots_v3'};
+const LS={checks:'l34_checks_v1',theme:'l34_theme',by:'l34_by',view:'l34_view',side:'l34_side',hot:'l34_hotspots_v3',inv:'l34_inv_v1'};
 function load(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 function clone(o){return JSON.parse(JSON.stringify(o));}
 
-const COMPS=DATA.compartments, LAYOUT=DATA.layout;
+let COMPS=load(LS.inv,clone(DATA.compartments)); const LAYOUT=DATA.layout;
 const CAL_PIN=(DATA.config&&DATA.config.calPin)||'5309';
-const byId={}; COMPS.forEach(c=>byId[c.id]=c);
+let byId={};
 function annotate(items,c,si,path){let lv=[];for(const it of items){it._id=hash(c.id+'|'+si+'|'+path.join('>')+'|'+it.text);if(it.children&&it.children.length){it._leaves=annotate(it.children,c,si,path.concat(it.text));lv=lv.concat(it._leaves);}else{it._leaf=true;it._leaves=[it._id];lv.push(it._id);c._leafIds.push(it._id);}}return lv;}
-COMPS.forEach(c=>{c._leafIds=[];c.sections.forEach((s,si)=>annotate(s.items,c,si,[]));});
-const TOTAL=COMPS.reduce((n,c)=>n+c._leafIds.length,0);
-const INDEX=[];
-COMPS.forEach(c=>c.sections.forEach(s=>{const walk=(items,path)=>items.forEach(it=>{INDEX.push({comp:c,section:s.name,path:path.slice(),text:it.text});if(it.children)walk(it.children,path.concat(it.text));});walk(s.items,[]);}));
+let TOTAL=0; let INDEX=[];
+function reindex(){
+  byId={}; COMPS.forEach(c=>byId[c.id]=c);
+  COMPS.forEach(c=>{c._leafIds=[];c.sections.forEach((s,si)=>annotate(s.items,c,si,[]));});
+  TOTAL=COMPS.reduce((n,c)=>n+c._leafIds.length,0);
+  INDEX=[];
+  COMPS.forEach(c=>c.sections.forEach(s=>{const walk=(items,path)=>items.forEach(it=>{INDEX.push({comp:c,section:s.name,path:path.slice(),text:it.text});if(it.children)walk(it.children,path.concat(it.text));});walk(s.items,[]);}));
+}
+function cleanItems(items){return items.map(it=>{const o={text:it.text};if(it.children&&it.children.length)o.children=cleanItems(it.children);return o;});}
+function cleanComps(){return COMPS.map(c=>{const o={id:c.id,label:c.label,name:c.name};if(c.note)o.note=c.note;if(c.updated)o.updated=c.updated;o.sections=c.sections.map(s=>{const so={};if(s.name)so.name=s.name;so.items=cleanItems(s.items);return so;});return o;});}
+function saveInv(){save(LS.inv,cleanComps());}
+reindex();
 
 let state={checks:load(LS.checks,{}),view:load(LS.view,'schematic'),checkmode:false,open:null,query:'',hotspots:load(LS.hot,clone(DATA.hotspots))};
-let rigSide=load(LS.side,'left'), calMode=false, selHot=null;
+let rigSide=load(LS.side,'left'), calMode=false, selHot=null, editUnlocked=false, editMode=false;
 const todayStr=new Date().toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
 function isChecked(id){return !!state.checks[id];}
@@ -331,7 +357,7 @@ function renderList(){
   COMPS.forEach(c=>{
     const card=el('div','lcard'); card.dataset.comp=c.id;
     const head=el('div','lhead');
-    head.innerHTML='<span class="tag">'+c.label+'</span><span class="nm">'+esc(c.name)+'</span>'+(c.note?'<span class="nt">'+esc(c.note)+'</span>':'')+'<span class="badge-slot"></span><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
+    head.innerHTML='<span class="tag">'+c.label+'</span><span class="nm">'+esc(c.name)+'</span>'+(c.note?'<span class="nt">'+esc(c.note)+'</span>':'')+(c.updated?'<span class="nt" style="opacity:.75">\u00b7 upd '+esc(c.updated)+'</span>':'')+'<span class="badge-slot"></span><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
     head.onclick=()=>card.classList.toggle('open');
     const body=el('div','lbody'); c.sections.forEach((s,si)=>body.appendChild(sectionEl(c,s,si)));
     card.appendChild(head); card.appendChild(body); wrap.appendChild(card);
@@ -358,20 +384,26 @@ function itemEl(it){
 
 /* ---------- drawer ---------- */
 function openComp(id){
-  state.open=id; const c=byId[id]; const d=$('#drawer');
-  d.innerHTML='<div class="dhead"><span class="tag">'+c.label+'</span><div><div class="nm">'+esc(c.name)+'</div>'+(c.note?'<div class="nt">'+esc(c.note)+'</div>':'')+'</div><button class="dclose" id="dclose">&#10005;</button></div>'+
+  state.open=id; editMode=false; const c=byId[id]; const d=$('#drawer');
+  d.innerHTML='<div class="dhead"><span class="tag">'+c.label+'</span><div><div class="nm">'+esc(c.name)+'</div>'+(c.note?'<div class="nt">'+esc(c.note)+'</div>':'')+(c.updated?'<div class="nt" style="color:var(--tx3)">Updated '+esc(c.updated)+'</div>':'')+'</div><button class="dclose" id="dclose">&#10005;</button></div>'+
     '<img class="dphoto" src="photos/'+encodeURIComponent(c.id)+'.jpg" alt="" onerror="this.style.display=\'none\'">'+
     '<div class="dprog"><span class="pmeta" id="dProgT"></span><div class="pbar"><i id="dProgB"></i></div></div>'+
-    '<div class="dtools"><button class="minib" id="dCheckAll">&#10003; Check all</button><button class="minib" id="dClear">Clear</button><button class="minib" id="dPrint">&#128438; Print this</button></div>'+
+    '<div class="dtools"><button class="minib" id="dEdit">\uD83D\uDD12 Edit</button><button class="minib" id="dCheckAll">&#10003; Check all</button><button class="minib" id="dClear">Clear</button><button class="minib" id="dPrint">&#128438; Print this</button></div>'+
     '<div class="dbody" id="dbody"></div>';
   $('#dclose').onclick=closeDrawer;
   $('#dCheckAll').onclick=()=>setLeaves(c._leafIds,true);
   $('#dClear').onclick=()=>setLeaves(c._leafIds,false);
   $('#dPrint').onclick=()=>doPrint('one');
+  $('#dEdit').onclick=toggleEdit;
   renderDrawerBody();
   d.classList.add('show'); d.setAttribute('aria-hidden','false'); $('#overlay').classList.add('show');
 }
-function renderDrawerBody(){const c=byId[state.open];if(!c)return;const body=$('#dbody');if(!body)return;body.innerHTML='';c.sections.forEach((s,si)=>body.appendChild(sectionEl(c,s,si)));const dp=$('#dProgT');if(dp){const d=compChecked(c),t=leafCount(c);dp.textContent=d+' / '+t+' checked';$('#dProgB').style.width=(t?d/t*100:0)+'%';}}
+function renderDrawerBody(){const c=byId[state.open];if(!c)return;const body=$('#dbody');if(!body)return;if(editMode){renderEditor(c,body);return;}body.innerHTML='';c.sections.forEach((s,si)=>body.appendChild(sectionEl(c,s,si)));const dp=$('#dProgT');if(dp){const d=compChecked(c),t=leafCount(c);dp.textContent=d+' / '+t+' checked';$('#dProgB').style.width=(t?d/t*100:0)+'%';}}
+function toggleEdit(){ if(!editMode){ if(!editUnlocked){ const p=prompt('Enter edit code to change inventory:'); if(p!==CAL_PIN){ if(p!==null)alert('Incorrect code.'); return; } editUnlocked=true; } } editMode=!editMode; const b=$('#dEdit'); if(b){b.textContent=editMode?'\u2713 Done editing':'\uD83D\uDD12 Edit'; b.classList.toggle('on',editMode);} renderDrawerBody(); }
+function afterEdit(c){ c.updated=todayStr; saveInv(); reindex(); refreshProgress(); renderDrawerBody(); renderList(); if(state.view==='schematic')paintHotspots(); }
+function exportInventory(){ const data={compartments:cleanComps(),layout:LAYOUT}; const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='inventory.json'; a.click(); }
+function editItemRow(c,s,ii){ const it=s.items[ii]; const row=el('div','eitem'); const ti=el('input','ein'); ti.value=it.text; ti.onchange=()=>{it.text=ti.value.trim()||it.text; afterEdit(c);}; row.appendChild(ti); if(it.children&&it.children.length){const sub=el('span','esub'); sub.textContent=(it._leaves?it._leaves.length:it.children.length)+' sub'; row.appendChild(sub);} const mv=el('select','emove'); mv.innerHTML='<option value="">move\u2026</option>'+COMPS.map(tc=>tc.sections.map((ts,tsi)=>'<option value="'+tc.id+'|'+tsi+'">'+esc(tc.label+(ts.name?' \u203A '+ts.name:''))+'</option>').join('')).join(''); mv.onchange=()=>{const v=mv.value; if(v){const p=v.split('|'); const tgt=byId[p[0]].sections[+p[1]]; s.items.splice(ii,1); tgt.items.push(it); byId[p[0]].updated=todayStr; afterEdit(c);}}; row.appendChild(mv); const del=el('button','xbtn'); del.innerHTML='&#10005;'; del.title='Delete item'; del.onclick=()=>{s.items.splice(ii,1); afterEdit(c);}; row.appendChild(del); return row; }
+function renderEditor(c,body){ body.innerHTML=''; const wrap=el('div','editor'); const cf=el('div','efield'); const l1=el('label'); l1.textContent='Compartment name'; const nameI=el('input','ein'); nameI.value=c.name; nameI.onchange=()=>{c.name=nameI.value.trim()||c.name; afterEdit(c);}; const l2=el('label'); l2.textContent='Note (optional)'; const noteI=el('input','ein'); noteI.value=c.note||''; noteI.onchange=()=>{c.note=noteI.value.trim()||undefined; afterEdit(c);}; cf.appendChild(l1); cf.appendChild(nameI); cf.appendChild(l2); cf.appendChild(noteI); wrap.appendChild(cf); c.sections.forEach((s,si)=>{ const sec=el('div','esec'); const sh=el('div','esec-h'); const sName=el('input','ein sname'); sName.value=s.name||''; sName.placeholder='(unnamed shelf / area)'; sName.onchange=()=>{s.name=sName.value.trim()||undefined; afterEdit(c);}; sh.appendChild(sName); const sDel=el('button','xbtn'); sDel.innerHTML='&#128465;'; sDel.title='Delete shelf'; sDel.onclick=()=>{if(confirm('Delete this shelf/area and its items?')){c.sections.splice(si,1); afterEdit(c);}}; sh.appendChild(sDel); sec.appendChild(sh); s.items.forEach((it,ii)=>sec.appendChild(editItemRow(c,s,ii))); const add=el('div','eadd'); const ai=el('input','ein'); ai.placeholder='Add item\u2026'; const ab=el('button','minib'); ab.textContent='+ Add'; const addFn=()=>{const tt=ai.value.trim(); if(tt){s.items.push({text:tt}); ai.value=''; afterEdit(c);}}; ab.onclick=addFn; ai.onkeydown=e=>{if(e.key==='Enter')addFn();}; add.appendChild(ai); add.appendChild(ab); sec.appendChild(add); wrap.appendChild(sec); }); const addSec=el('button','minib'); addSec.textContent='+ Add shelf / area'; addSec.style.marginTop='10px'; addSec.onclick=()=>{c.sections.push({items:[]}); afterEdit(c);}; wrap.appendChild(addSec); const exp=el('button','minib'); exp.textContent='\u2913 Export inventory.json'; exp.style.marginTop='14px'; exp.onclick=exportInventory; const note=el('div','enote'); note.innerHTML='Edits save on this device as you go. <strong>Export inventory.json</strong> and send it to lock changes into the master copy / repo.'; wrap.appendChild(exp); wrap.appendChild(note); body.appendChild(wrap); }
 function closeDrawer(){state.open=null;$('#drawer').classList.remove('show');$('#drawer').setAttribute('aria-hidden','true');$('#overlay').classList.remove('show');}
 
 /* ---------- search ---------- */
